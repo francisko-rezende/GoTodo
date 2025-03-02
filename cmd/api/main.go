@@ -63,7 +63,16 @@ func main() {
 
 	defer db.Close()
 
-	logger.Info("db connection established")
+	app := &application{
+		config: cfg,
+		logger: logger,
+	}
+
+	err = app.serve()
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
 }
 
 func openDB(cfg config) (*pgxpool.Pool, error) {
