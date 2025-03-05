@@ -1,6 +1,7 @@
 package main
 
 import (
+	"GoTodo/internal/data"
 	"context"
 	"flag"
 	"log/slog"
@@ -26,6 +27,7 @@ type config struct {
 
 type application struct {
 	config config
+	models data.Models
 	logger *slog.Logger
 }
 
@@ -62,9 +64,11 @@ func main() {
 	}
 
 	defer db.Close()
+	logger.Info("connection pool stablished")
 
 	app := &application{
 		config: cfg,
+		models: data.NewModels(db),
 		logger: logger,
 	}
 
