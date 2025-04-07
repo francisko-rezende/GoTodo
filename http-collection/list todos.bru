@@ -1,0 +1,18 @@
+meta {
+  name: list todos
+  type: http
+  seq: 3
+}
+
+get {
+  url: http://localhost:4000/v1/todos?page=1&page_sikze=10&sort=created_at
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 1
+  page_sikze: 10
+  sort: created_at
+  ~order: 
+}
