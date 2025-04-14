@@ -94,52 +94,29 @@ func (t *TodosModel) GetAll(search string, filters Filters) ([]*Todo, Metadata, 
 	return todos, metadata, nil
 }
 
-// func (t *TodosModel) GetAll(search string, filters Filters) ([]*Todo, Metadata, error) {
-// 	query := fmt.Sprintf(`
-// 	SELECT count(*) OVER(), id, created_at, title, description, due_date, is_completed
-// 	FROM todos
-// 	WHERE (
-//         to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR
-//         to_tsvector('simple', description) @@ plainto_tsquery('simple', $1) OR
-//         $1 = ''
-//   )
-// 	ORDER BY %s %s, id ASC
-// 	LIMIT $2 OFFSET $3
-// 	`, filters.sortColumn(), filters.sortDirection())
-//
-// 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-// 	defer cancel()
-// 	args := []any{search, filters.limit(), filters.offset()}
-//
-// 	rows, err := t.DB.Query(ctx, query, args...)
-// 	if err != nil {
-// 		return nil, Metadata{}, err
-// 	}
-//
-// 	defer rows.Close()
-//
-// 	totalRecords := 0
-// 	todos := []*Todo{}
-//
-// 	for rows.Next() {
-// 		var todo Todo
-// 		err := rows.Scan(
-// 			&totalRecords,
-// 			&todo.ID,
-// 			&todo.CreatedAt,
-// 			&todo.Title,
-// 			&todo.Description,
-// 			&todo.DueDate,
-// 			&todo.IsCompleted,
-// 		)
-// 		if err != nil {
-// 			return nil, Metadata{}, err
-// 		}
-//
-// 		todos = append(todos, &todo)
-//
-// 	}
-//
-// 	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
-// 	return todos, metadata, nil
-// }
+func (t *TodosModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+
+	query := `
+	DELETE FROM todos
+	WHERE id = $1
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	result, err := t.DB.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
+	return nil
+}
