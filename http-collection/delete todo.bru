@@ -1,0 +1,15 @@
+meta {
+  name: delete todo
+  type: http
+  seq: 4
+}
+
+delete {
+  url: http://localhost:4000/v1/todos/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: 12
+}

@@ -1027,3 +1027,98 @@ func (app *application) listTodosHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 ```
+
+### delete todo
+
+- create helper for reading id path params
+
+```golang
+func (app *application) readIDParam(r *http.Request) (int64, error) {
+	params := httprouter.ParamsFromContext(r.Context())
+
+	id, err := strconv.ParseInt(params.ByName("id"), 10, 64)
+
+	if err != nil || id < 1 {
+		return 0, errors.New("invalid id parameter")
+	}
+
+	return id, nil
+}
+```
+- create delete model for deleting todos
+
+```golang
+func (t *TodosModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+
+	query := `
+	DELETE FROM todos
+	WHERE id = $1
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	result, err := t.DB.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
+	return nil
+}
+```
+
+- create a handler for deleting todos
+
+```golang
+func (app *application) deleteTodoHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	err = app.models.Todos.Delete(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "todo deleted successfuly"}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+```
+- add new route for delenting todos
+
+```golang
+func (app *application) routes() http.Handler {
+	router := httprouter.New()
+
+	router.NotFound = http.HandlerFunc(app.notFoundResponse)
+	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
+
+	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
+	router.HandlerFunc(http.MethodPost, "/v1/todos", app.createTodoHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/todos", app.listTodosHandler)
+	router.HandlerFunc(http.MethodDelete, "/v1/todos/:id", app.deleteTodoHandler) //here
+
+	return router
+}
+
+```
