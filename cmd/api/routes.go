@@ -18,5 +18,7 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodDelete, "/v1/todos/:id", app.deleteTodoHandler)
 	router.HandlerFunc(http.MethodPut, "/v1/todos/:id", app.updateTodoHandler)
 
+	router.HandlerFunc(http.MethodPost, "/v1/users", app.createUserHandler)
+
 	return router
 }
