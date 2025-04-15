@@ -2,12 +2,44 @@ package data
 
 import (
 	"GoTodo/internal/data/validator"
+	"context"
 	"errors"
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var ErrDuplicateEmail = errors.New("duplicate email")
+
+type UsersModel struct {
+	DB *pgxpool.Pool
+}
+
+func (u *UsersModel) Insert(user *User) error {
+	query := `
+	INSERT INTO users (name, email, password_hash)
+	VALUES ($1, $2, $3)
+	RETURNING id, created_at`
+
+	args := []any{user.Name, user.Email, user.Password.hash}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := u.DB.QueryRow(ctx, query, args...).Scan(&user.Id, &user.CreatedAt)
+	if err != nil {
+		switch {
+		case err.Error() == `pq: duplicate key value violates unique constraint "user_email_key`:
+			return ErrDuplicateEmail
+		default:
+			return err
+		}
+	}
+
+	return nil
+}
 
 type password struct {
 	plaintext *string

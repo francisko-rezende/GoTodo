@@ -8,6 +8,7 @@ import (
 
 type Models struct {
 	Todos TodosModel
+	Users UsersModel
 }
 
 var (
@@ -18,5 +19,6 @@ var (
 func NewModels(db *pgxpool.Pool) Models {
 	return Models{
 		Todos: TodosModel{DB: db},
+		Users: UsersModel{DB: db},
 	}
 }
