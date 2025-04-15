@@ -1,7 +1,10 @@
 package data
 
 import (
+	"GoTodo/internal/data/validator"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -34,6 +37,34 @@ func (t *TodosModel) Insert(todo *Todo) error {
 	defer cancel()
 
 	return t.DB.QueryRow(ctx, query, args...).Scan(&todo.ID, &todo.CreatedAt)
+}
+
+func (t *TodosModel) Get(id int64) (*Todo, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+
+	query := `
+	SELECT id, created_at, title, description, due_date, is_completed
+	FROM todos
+	where id = $1`
+
+	var todo Todo
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := t.DB.QueryRow(ctx, query, id).Scan(&todo.ID, &todo.CreatedAt, &todo.Title, &todo.Description, &todo.DueDate, &todo.IsCompleted)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &todo, nil
 }
 
 func (t *TodosModel) GetAll(search string, filters Filters) ([]*Todo, Metadata, error) {
@@ -119,4 +150,40 @@ func (t *TodosModel) Delete(id int64) error {
 	}
 
 	return nil
+}
+
+func (t *TodosModel) Update(todo *Todo) error {
+	query := `
+	UPDATE todos
+	SET title = $1, description = $2, due_date = $3, is_completed = $4
+	WHERE id = $5
+	RETURNING id
+	`
+
+	args := []any{
+		todo.Title,
+		todo.Description,
+		todo.DueDate,
+		todo.IsCompleted,
+		todo.ID,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := t.DB.QueryRow(ctx, query, args...).Scan(&todo.ID)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		}
+		return err
+	}
+
+	return nil
+}
+
+func ValidateTodo(v *validator.Validator, todo *Todo) {
+	v.Check(todo.Title != "", "title", "must be provided")
+	v.Check(len(todo.Title) <= 500, "title", "must not have more than 500 characters long")
 }
