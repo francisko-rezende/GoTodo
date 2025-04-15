@@ -10,7 +10,10 @@ type Models struct {
 	Todos TodosModel
 }
 
-var ErrRecordNotFound = errors.New("record not found")
+var (
+	ErrRecordNotFound = errors.New("record not found")
+	ErrEditConflict   = errors.New("edit conflict")
+)
 
 func NewModels(db *pgxpool.Pool) Models {
 	return Models{

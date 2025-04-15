@@ -1,0 +1,24 @@
+meta {
+  name: edit todo
+  type: http
+  seq: 5
+}
+
+put {
+  url: http://localhost:4000/v1/todos/:id
+  body: json
+  auth: none
+}
+
+params:path {
+  id: 1
+}
+
+body:json {
+  {
+    "title": "edited study golang 1",
+    "description": "edited study golang basics",
+    "due_date": "2029-03-04T19:37:50-03:00",
+    "is_completed": false
+  }
+}

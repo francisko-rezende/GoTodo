@@ -1104,7 +1104,7 @@ func (app *application) deleteTodoHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 ```
-- add new route for delenting todos
+- add new route for deleting todos
 
 ```golang
 func (app *application) routes() http.Handler {
@@ -1119,6 +1119,190 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodDelete, "/v1/todos/:id", app.deleteTodoHandler) //here
 
 	return router
+}
+
+```
+
+### edit todo
+
+- create route for editing todos
+
+```golang
+func (app *application) routes() http.Handler {
+	router := httprouter.New()
+
+	router.NotFound = http.HandlerFunc(app.notFoundResponse)
+	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
+
+	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
+	router.HandlerFunc(http.MethodPost, "/v1/todos", app.createTodoHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/todos", app.listTodosHandler)
+	router.HandlerFunc(http.MethodDelete, "/v1/todos/:id", app.deleteTodoHandler)
+	router.HandlerFunc(http.MethodPut, "/v1/todos/:id", app.updateTodoHandler) // here
+
+	return router
+}
+```
+
+- create create model for getting todo details
+
+```golang
+func (t *TodosModel) Get(id int64) (*Todo, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+
+	query := `
+	SELECT id, created_at, title, description, due_date, is_completed
+	FROM todos
+	where id = $1`
+
+	var todo Todo
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := t.DB.QueryRow(ctx, query, id).Scan(&todo.ID, &todo.CreatedAt, &todo.Title, &todo.Description, &todo.DueDate, &todo.IsCompleted)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &todo, nil
+}
+```
+
+- create ValidateTodo function
+
+```golang
+func ValidateTodo(v *validator.Validator, todo *Todo) {
+	v.Check(todo.Title != "", "title", "must be provided")
+	v.Check(len(todo.Title) <= 500, "title", "must not have more than 500 characters long")
+}
+```
+
+- create model for updating todos
+
+```golang
+func (t *TodosModel) Update(todo *Todo) error {
+	query := `
+	UPDATE todos
+	SET title = $1, description = $2, due_date = $3, is_completed = $4
+	WHERE id = $5
+	RETURNING id
+	`
+
+	args := []any{
+		todo.Title,
+		todo.Description,
+		todo.DueDate,
+		todo.IsCompleted,
+		todo.ID,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := t.DB.QueryRow(ctx, query, args...).Scan(&todo.ID)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		}
+		return err
+	}
+
+	return nil
+}
+```
+
+- create response for when there is an edit conflict
+
+```golang
+func (app *application) editConflictResponse(w http.ResponseWriter, r *http.Request) {
+	message := "unable to update record due to an edit conflict, please try again"
+	app.errorResponse(w, r, http.StatusConflict, message)
+}
+```
+
+- create a handler for processing the update requests
+
+```golang
+func (app *application) updateTodoHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	todo, err := app.models.Todos.Get(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+
+		return
+	}
+
+	var input struct {
+		Title       *string    `json:"title"`
+		Description *string    `json:"description"`
+		DueDate     *time.Time `json:"due_date"`
+		IsCompleted *bool      `json:"is_completed"`
+	}
+
+	err = app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	if input.Title != nil {
+		todo.Title = *input.Title
+	}
+
+	if input.Description != nil {
+		todo.Description = *input.Description
+	}
+
+	if input.DueDate != nil {
+		todo.DueDate = *input.DueDate
+	}
+
+	if input.IsCompleted != nil {
+		todo.IsCompleted = *input.IsCompleted
+	}
+
+	v := validator.New()
+
+	if data.ValidateTodo(v, todo); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	err = app.models.Todos.Update(todo)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"todo": todo}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }
 
 ```

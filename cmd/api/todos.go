@@ -14,7 +14,7 @@ func (app *application) createTodoHandler(w http.ResponseWriter, r *http.Request
 		Title       string    `json:"title"`
 		Description string    `json:"description"`
 		DueDate     time.Time `json:"due_date"`
-		IsCompleted bool      `json:"is_complete"`
+		IsCompleted bool      `json:"is_completed"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -110,6 +110,79 @@ func (app *application) deleteTodoHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	err = app.writeJSON(w, http.StatusOK, envelope{"message": "todo deleted successfuly"}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) updateTodoHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	todo, err := app.models.Todos.Get(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+
+		return
+	}
+
+	var input struct {
+		Title       *string    `json:"title"`
+		Description *string    `json:"description"`
+		DueDate     *time.Time `json:"due_date"`
+		IsCompleted *bool      `json:"is_completed"`
+	}
+
+	err = app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	if input.Title != nil {
+		todo.Title = *input.Title
+	}
+
+	if input.Description != nil {
+		todo.Description = *input.Description
+	}
+
+	if input.DueDate != nil {
+		todo.DueDate = *input.DueDate
+	}
+
+	if input.IsCompleted != nil {
+		todo.IsCompleted = *input.IsCompleted
+	}
+
+	v := validator.New()
+
+	if data.ValidateTodo(v, todo); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	err = app.models.Todos.Update(todo)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"todo": todo}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
