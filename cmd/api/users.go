@@ -43,6 +43,7 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 		switch {
 		case errors.Is(err, data.ErrDuplicateEmail):
 			v.AddError("email", "a user with this email already exists")
+			app.failedValidationResponse(w, r, v.Errors)
 		default:
 			app.serverErrorResponse(w, r, err)
 		}
