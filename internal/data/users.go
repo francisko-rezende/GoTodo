@@ -3,6 +3,7 @@ package data
 import (
 	"GoTodo/internal/data/validator"
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 	"unicode/utf8"
@@ -15,6 +16,31 @@ var ErrDuplicateEmail = errors.New("duplicate email")
 
 type UsersModel struct {
 	DB *pgxpool.Pool
+}
+
+func (u *UsersModel) GetByEmail(email string) (*User, error) {
+	query := `
+	SELECT id, created_at, name, email, password_hash
+	FROM users
+	WHERE email = $1
+	`
+
+	var user User
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := u.DB.QueryRow(ctx, query, email).Scan(&user.Id, &user.CreatedAt, &user.Name, &user.Email, &user.Password.hash)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
 }
 
 func (u *UsersModel) Insert(user *User) error {
