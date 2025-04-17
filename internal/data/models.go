@@ -7,8 +7,9 @@ import (
 )
 
 type Models struct {
-	Todos TodosModel
-	Users UsersModel
+	Todos  TodosModel
+	Users  UsersModel
+	Tokens TokensModel
 }
 
 var (
@@ -18,7 +19,8 @@ var (
 
 func NewModels(db *pgxpool.Pool) Models {
 	return Models{
-		Todos: TodosModel{DB: db},
-		Users: UsersModel{DB: db},
+		Todos:  TodosModel{DB: db},
+		Users:  UsersModel{DB: db},
+		Tokens: TokensModel{DB: db},
 	}
 }
