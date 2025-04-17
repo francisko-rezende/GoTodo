@@ -20,5 +20,7 @@ func (app *application) routes() http.Handler {
 
 	router.HandlerFunc(http.MethodPost, "/v1/users", app.createUserHandler)
 
+	router.HandlerFunc(http.MethodPost, "/v1/auth/sign-in", app.createAuthenticationTokenHandler)
+
 	return router
 }
