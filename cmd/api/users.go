@@ -50,4 +50,9 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 
 		return
 	}
+
+	err = app.writeJSON(w, http.StatusCreated, envelope{"user": user}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }
