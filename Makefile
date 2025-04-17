@@ -41,6 +41,13 @@ db/migration/up: confirm
 	@echo 'Running up migrations...'
 	migrate -path ./migrations -database $(DB_DSN) up 
 
+## db/migrations/goto migration=$1: go to a specific migration
+.PHONY: db/migration/goto
+db/migration/goto: confirm
+
+	@echo 'Going to migration version...'
+	migrate -path ./migrations -database $(DB_DSN) goto ${migration} 
+
 # ==================================================================================== #
 # QUALITY CONTROL
 # ==================================================================================== #
