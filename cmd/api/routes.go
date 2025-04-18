@@ -13,14 +13,14 @@ func (app *application) routes() http.Handler {
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
-	router.HandlerFunc(http.MethodPost, "/v1/todos", app.createTodoHandler)
-	router.HandlerFunc(http.MethodGet, "/v1/todos", app.listTodosHandler)
-	router.HandlerFunc(http.MethodDelete, "/v1/todos/:id", app.deleteTodoHandler)
-	router.HandlerFunc(http.MethodPut, "/v1/todos/:id", app.updateTodoHandler)
+	router.HandlerFunc(http.MethodPost, "/v1/todos", app.protectedRouteMiddleware(app.createTodoHandler))
+	router.HandlerFunc(http.MethodGet, "/v1/todos", app.protectedRouteMiddleware(app.listTodosHandler))
+	router.HandlerFunc(http.MethodDelete, "/v1/todos/:id", app.protectedRouteMiddleware(app.deleteTodoHandler))
+	router.HandlerFunc(http.MethodPut, "/v1/todos/:id", app.protectedRouteMiddleware(app.updateTodoHandler))
 
 	router.HandlerFunc(http.MethodPost, "/v1/users", app.createUserHandler)
 
 	router.HandlerFunc(http.MethodPost, "/v1/auth/sign-in", app.createAuthenticationTokenHandler)
 
-	return app.authenticate(router)
+	return router
 }

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func (app *application) authenticate(next http.Handler) http.Handler {
+func (app *application) protectedRouteMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Authorization")
 
