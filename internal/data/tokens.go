@@ -1,10 +1,13 @@
 package data
 
 import (
+	"GoTodo/internal/data/validator"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base32"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -24,6 +27,10 @@ type Token struct {
 
 type TokensModel struct {
 	DB *pgxpool.Pool
+}
+
+func ValidateTokenPlainText(v *validator.Validator, tokenPlaintext string) {
+	v.Check(tokenPlaintext != "", "token", "must be provided")
 }
 
 func generateToken(userID int64, ttl time.Duration, scope string) (*Token, error) {
@@ -60,6 +67,37 @@ func (t *TokensModel) Insert(token *Token) error {
 
 	_, err := t.DB.Exec(ctx, query, args...)
 	return err
+}
+
+func (t *TokensModel) GetForToken(tokenPlaintext string) (*User, error) {
+	query := `
+	SELECT users.id, users.created_at, users.email, users.password_hash
+	FROM users
+	INNER JOIN tokens
+	ON user.id = tokens.user_id
+	WHERE tokens.hash = $1
+	AND tokens.expiry > $3
+	`
+
+	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
+	args := []any{tokenHash[:], time.Now()}
+
+	var user User
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := t.DB.QueryRow(ctx, query, args...).Scan(&user.Id, &user.CreatedAt, &user.Email, &user.Password.hash)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
 }
 
 func (t *TokensModel) New(userID int64, ttl time.Duration, scope string) (*Token, error) {
