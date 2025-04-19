@@ -74,9 +74,9 @@ func (t *TokensModel) GetForToken(tokenPlaintext string) (*User, error) {
 	SELECT users.id, users.created_at, users.email, users.password_hash
 	FROM users
 	INNER JOIN tokens
-	ON user.id = tokens.user_id
+	ON users.id = tokens.user_id
 	WHERE tokens.hash = $1
-	AND tokens.expiry > $3
+	AND tokens.expiry > $2
 	`
 
 	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
