@@ -39,7 +39,9 @@ func (app *application) createTodoHandler(w http.ResponseWriter, r *http.Request
 		app.failedValidationResponse(w, r, v.Errors)
 	}
 
-	err = app.models.Todos.Insert(todo)
+	user := app.contextGetUser(r)
+
+	err = app.models.Todos.Insert(user.Id, todo)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -78,7 +80,9 @@ func (app *application) listTodosHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	todos, metadata, err := app.models.Todos.GetAll(input.Search, input.Filters)
+	user := app.contextGetUser(r)
+
+	todos, metadata, err := app.models.Todos.GetAll(user.Id, input.Search, input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
