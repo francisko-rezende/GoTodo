@@ -24,14 +24,14 @@ type TodosModel struct {
 	DB *pgxpool.Pool
 }
 
-func (t *TodosModel) Insert(todo *Todo) error {
+func (t *TodosModel) Insert(userId int64, todo *Todo) error {
 	query := `
-	INSERT INTO todos (title, description, due_date, is_completed)
-	VALUES ($1, $2, $3, $4)
+	INSERT INTO todos (title, description, due_date, is_completed, user_id)
+	VALUES ($1, $2, $3, $4, $5)
 	RETURNING id, created_at
 	`
 
-	args := []any{todo.Title, todo.Description, todo.DueDate, todo.IsCompleted}
+	args := []any{todo.Title, todo.Description, todo.DueDate, todo.IsCompleted, userId}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -39,7 +39,7 @@ func (t *TodosModel) Insert(todo *Todo) error {
 	return t.DB.QueryRow(ctx, query, args...).Scan(&todo.ID, &todo.CreatedAt)
 }
 
-func (t *TodosModel) Get(id int64) (*Todo, error) {
+func (t *TodosModel) Get(id int64, userId int64) (*Todo, error) {
 	if id < 1 {
 		return nil, ErrRecordNotFound
 	}
@@ -47,14 +47,16 @@ func (t *TodosModel) Get(id int64) (*Todo, error) {
 	query := `
 	SELECT id, created_at, title, description, due_date, is_completed
 	FROM todos
-	where id = $1`
+	where id = $1 AND user_id = $2`
 
 	var todo Todo
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := t.DB.QueryRow(ctx, query, id).Scan(&todo.ID, &todo.CreatedAt, &todo.Title, &todo.Description, &todo.DueDate, &todo.IsCompleted)
+	args := []any{id, userId}
+
+	err := t.DB.QueryRow(ctx, query, args...).Scan(&todo.ID, &todo.CreatedAt, &todo.Title, &todo.Description, &todo.DueDate, &todo.IsCompleted)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -67,21 +69,24 @@ func (t *TodosModel) Get(id int64) (*Todo, error) {
 	return &todo, nil
 }
 
-func (t *TodosModel) GetAll(search string, filters Filters) ([]*Todo, Metadata, error) {
+func (t *TodosModel) GetAll(userId int64, search string, filters Filters) ([]*Todo, Metadata, error) {
 	countQuery := `
         SELECT count(*)
         FROM todos
-        WHERE (
-            to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR
-            to_tsvector('simple', description) @@ plainto_tsquery('simple', $1) OR
-            $1 = ''
+        WHERE user_id = $1 AND(
+            to_tsvector('simple', title) @@ plainto_tsquery('simple', $2) OR
+            to_tsvector('simple', description) @@ plainto_tsquery('simple', $2) OR
+            $2 = ''
         )`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	args := []any{userId, search}
+
 	var totalRecords int
-	err := t.DB.QueryRow(ctx, countQuery, search).Scan(&totalRecords)
+
+	err := t.DB.QueryRow(ctx, countQuery, args...).Scan(&totalRecords)
 	if err != nil {
 		return nil, Metadata{}, err
 	}
@@ -89,16 +94,18 @@ func (t *TodosModel) GetAll(search string, filters Filters) ([]*Todo, Metadata, 
 	todosQuery := fmt.Sprintf(`
         SELECT id, created_at, title, description, due_date, is_completed
         FROM todos
-        WHERE (
-            to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR
-            to_tsvector('simple', description) @@ plainto_tsquery('simple', $1) OR
-            $1 = ''
+        WHERE user_id = $1 AND (
+            to_tsvector('simple', title) @@ plainto_tsquery('simple', $2) OR
+            to_tsvector('simple', description) @@ plainto_tsquery('simple', $2) OR
+            $2 = ''
         )
         ORDER BY %s %s, id ASC
-        LIMIT $2 OFFSET $3
+        LIMIT $3 OFFSET $4
     `, filters.sortColumn(), filters.sortDirection())
 
-	rows, err := t.DB.Query(ctx, todosQuery, search, filters.limit(), filters.offset())
+	args = []any{userId, search, filters.limit(), filters.offset()}
+
+	rows, err := t.DB.Query(ctx, todosQuery, args...)
 	if err != nil {
 		return nil, Metadata{}, err
 	}
@@ -125,20 +132,22 @@ func (t *TodosModel) GetAll(search string, filters Filters) ([]*Todo, Metadata, 
 	return todos, metadata, nil
 }
 
-func (t *TodosModel) Delete(id int64) error {
+func (t *TodosModel) Delete(id int64, userId int64) error {
 	if id < 1 {
 		return ErrRecordNotFound
 	}
 
 	query := `
 	DELETE FROM todos
-	WHERE id = $1
+	WHERE id = $1 AND user_id = $2
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	result, err := t.DB.Exec(ctx, query, id)
+	args := []any{id, userId}
+
+	result, err := t.DB.Exec(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -152,11 +161,11 @@ func (t *TodosModel) Delete(id int64) error {
 	return nil
 }
 
-func (t *TodosModel) Update(todo *Todo) error {
+func (t *TodosModel) Update(userId int64, todo *Todo) error {
 	query := `
 	UPDATE todos
 	SET title = $1, description = $2, due_date = $3, is_completed = $4
-	WHERE id = $5
+	WHERE id = $5 AND user_id = $6
 	RETURNING id
 	`
 
@@ -166,6 +175,7 @@ func (t *TodosModel) Update(todo *Todo) error {
 		todo.DueDate,
 		todo.IsCompleted,
 		todo.ID,
+		userId,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
