@@ -100,8 +100,9 @@ func (app *application) deleteTodoHandler(w http.ResponseWriter, r *http.Request
 		app.notFoundResponse(w, r)
 		return
 	}
+	user := app.contextGetUser(r)
 
-	err = app.models.Todos.Delete(id)
+	err = app.models.Todos.Delete(user.Id, id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -126,7 +127,9 @@ func (app *application) updateTodoHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	todo, err := app.models.Todos.Get(id)
+	user := app.contextGetUser(r)
+
+	todo, err := app.models.Todos.Get(user.Id, id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -174,7 +177,7 @@ func (app *application) updateTodoHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.models.Todos.Update(todo)
+	err = app.models.Todos.Update(user.Id, todo)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrEditConflict):
